@@ -12,14 +12,37 @@ curl -fsSL https://raw.githubusercontent.com/geekgao/brave-ask-mcp/main/install.
 
 1. 检测操作系统和架构，下载对应预编译二进制
 2. 安装到 `$HOME/.local/bin/bravegrab`
-3. 自动配置 opencode MCP 配置（`~/.config/opencode/opencode.json`）
+3. 根据环境变量配置对应的 MCP 客户端（默认仅配置 opencode）
+
+**一次性配置所有客户端：**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/geekgao/brave-ask-mcp/main/install.sh | CONFIGURE_ALL=true bash
+```
+
+**配置指定客户端：**
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/geekgao/brave-ask-mcp/main/install.sh | CONFIGURE_CLAUDE=true CONFIGURE_CURSOR=true bash
+```
 
 ### 环境变量
 
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
 | `INSTALL_DIR` | `~/.local/bin` | 二进制安装目录 |
+| `CONFIGURE_ALL` | `false` | 设为 `true` 时自动配置所有支持的 MCP 客户端 |
+| `CONFIGURE_OPENCODE` | `true` | 是否配置 opencode |
+| `CONFIGURE_CLAUDE` | `false` | 是否配置 Claude Desktop（`CONFIGURE_ALL=true` 时自动启用） |
+| `CONFIGURE_CURSOR` | `false` | 是否配置 Cursor |
+| `CONFIGURE_CONTINUE` | `false` | 是否配置 Continue.dev |
+| `CONFIGURE_ZED` | `false` | 是否配置 Zed |
 | `OPENCODE_CONFIG` | `~/.config/opencode/opencode.json` | opencode 配置文件路径 |
+| `CLAUDE_CONFIG` | 自动检测 | Claude Desktop 配置文件路径 |
+| `CURSOR_GLOBAL_CONFIG` | `~/.cursor/mcp.json` | Cursor 全局配置文件路径 |
+| `CURSOR_LOCAL_CONFIG` | `$(pwd)/.cursor/mcp.json` | Cursor 项目级配置文件路径 |
+| `CONTINUE_CONFIG` | `~/.continue/config.json` | Continue.dev 配置文件路径 |
+| `ZED_CONFIG` | `~/.config/zed/settings.json` | Zed 配置文件路径 |
 | `PROXY_LIST` | `http://127.0.0.1:8080,socks5://127.0.0.1:1080` | 代理列表（逗号/空格/分号分隔） |
 
 ## 手动编译
@@ -50,7 +73,13 @@ go build -o bravegrab .
 }
 ```
 
-### 其他 MCP 客户端
+### Claude Desktop
+
+配置文件路径：
+
+- macOS: `~/Library/Application Support/Claude/claude_desktop_config.json`
+- Windows: `%APPDATA%\Claude\claude_desktop_config.json`
+- Linux: `~/.config/claude-desktop/claude_desktop_config.json`
 
 ```json
 {
@@ -61,6 +90,61 @@ go build -o bravegrab .
   }
 }
 ```
+
+> 修改配置后需要重启 Claude Desktop。
+
+### Cursor
+
+- 项目级配置：`.cursor/mcp.json`（项目根目录）
+- 全局配置：`~/.cursor/mcp.json`
+
+```json
+{
+  "mcpServers": {
+    "brave_ask": {
+      "command": "bravegrab"
+    }
+  }
+}
+```
+
+> 支持热重载，修改后无需重启。
+
+### Continue.dev
+
+配置文件路径：`~/.continue/config.json`（或 `config.yaml`）
+
+```json
+{
+  "mcpServers": [
+    {
+      "name": "brave_ask",
+      "command": "bravegrab"
+    }
+  ]
+}
+```
+
+> Continue.dev 使用数组格式，每个 server 必须包含 `name` 字段。
+
+### Zed
+
+配置文件路径：`~/.config/zed/settings.json`
+
+```json
+{
+  "context_servers": {
+    "brave_ask": {
+      "command": {
+        "path": "bravegrab",
+        "args": []
+      }
+    }
+  }
+}
+```
+
+> Zed 使用 `context_servers` 作为根 key，且 `command` 需使用对象格式。修改后需重启 Zed。
 
 ## 工具
 
