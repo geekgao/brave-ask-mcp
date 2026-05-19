@@ -84,6 +84,82 @@ brave_ask_markdown keyword=golang context proxy=0 html=true
 ```
 
 
+## opencode 配合 AGENTS.md 使用指南
+
+### 基础配置
+
+在 `AGENTS.md` 中加入以下指令，让 opencode 自动识别何时该使用联网搜索：
+
+```markdown
+如果用户要求搜索或者你不确定信息是否有效时，你可以使用 MCP 工具 `brave_ask_markdown`。
+
+凡是涉及联网搜索、最新信息、官网文档、外部事实验证、网页内容检索，都必须优先调用 `brave_ask_markdown`。
+不要在这类任务中只凭已有知识直接回答。
+
+如果第一次搜索结果不够好，要主动更换关键词再次调用 `brave_ask_markdown`。
+
+只有在纯本地任务、纯改写、纯总结、纯推理，或用户明确要求不要联网时，才可以不调用这个工具。
+```
+
+### 常见场景示例
+
+**场景 1：搜索最新 API 文档**
+
+用户提问："React 19 的新 API use() 怎么用？"
+
+opencode 会自动调用：
+```
+brave_ask_markdown keyword=React 19 use() hook API
+```
+
+**场景 2：验证技术信息的准确性**
+
+用户提问："Go 1.24 的泛型类型别名真的落地了吗？"
+
+opencode 会自动调用：
+```
+brave_ask_markdown keyword=Go 1.24 泛型类型别名 type alias
+```
+
+如果返回结果不够详细，会自动换关键词重试：
+```
+brave_ask_markdown keyword=golang 1.24 类型参数别名
+```
+
+**场景 3：排查错误信息**
+
+用户提问："我遇到了 ERR_PNPM_LOCKFILE_MISSING 这个错误"
+
+```
+brave_ask_markdown keyword=ERR_PNPM_LOCKFILE_MISSING 解决方法
+```
+
+**场景 4：对比技术方案**
+
+用户提问："Prisma 和 Drizzle ORM 哪个好？"
+
+```
+brave_ask_markdown keyword=Prisma vs Drizzle ORM comparison 2025
+```
+
+**场景 5：查阅官方文档**
+
+用户提问："tailwindcss v4 的配置文件怎么改？"
+
+```
+brave_ask_markdown keyword=tailwindcss v4 configuration tailwind.config
+```
+
+### 进阶技巧
+
+1. **关键词优化**：英文关键词结果更丰富，优先使用英文搜索，中文关键词也完全支持
+2. **多轮追问**：如果一轮搜索不够，AGENTS.md 中的规则会触发自动换关键词重试
+3. **结合本地知识**：搜索到的结果会和 opencode 自身知识融合，给出更准确的回答
+4. **代理支持**：在 AGENTS.md 中也可以指定默认代理：
+   ```markdown
+   如果网络环境需要代理，调用 `brave_ask_markdown keyword=<关键词> proxy=0`
+   ```
+
 ## 系统要求
 
 - 运行时需要能够启动 headless Chromium（go-rod 会自动下载，首次启动较慢）
