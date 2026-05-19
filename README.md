@@ -73,6 +73,30 @@ go build -o bravegrab .
 }
 ```
 
+### Claude Code CLI
+
+在项目根目录配置 `.mcp.json`，或使用 `claude mcp add` 命令快速添加：
+
+```bash
+claude mcp add brave_ask -- stdio bravegrab
+```
+
+这会自动在项目根目录生成 `.mcp.json`：
+
+```json
+{
+  "mcpServers": {
+    "brave_ask": {
+      "type": "stdio",
+      "command": "bravegrab",
+      "args": []
+    }
+  }
+}
+```
+
+> 也可手动创建 `.mcp.json` 放在项目根目录，通过版本控制与团队共享。
+
 ### Claude Desktop
 
 配置文件路径：
@@ -160,19 +184,20 @@ go build -o bravegrab .
 | `proxy` | string | 否 | 代理 URL 或 `PROXY_LIST` 中的索引（如 `0`、`1`） |
 | `html` | bool | 否 | 设为 `true` 时返回原始 HTML 而非 Markdown |
 
-**使用示例（opencode）：**
+**使用示例：**
 
 ```
 brave_ask_markdown keyword=Go语言泛型教程
 brave_ask_markdown keyword=golang context proxy=0 html=true
 ```
 
+### 提示词配置
 
-## opencode 配合 AGENTS.md 使用指南
+为了让 AI 助手自动调用 `brave_ask_markdown`，可以在各客户端的指令/规则文件中加入以下提示。
 
-### 基础配置
+#### opencode（AGENTS.md）
 
-在 `AGENTS.md` 中加入以下指令，让 opencode 自动识别何时该使用联网搜索：
+在 `AGENTS.md` 中加入：
 
 ```markdown
 如果用户要求搜索或者你不确定信息是否有效时，你可以使用 MCP 工具 `brave_ask_markdown`。
@@ -185,7 +210,61 @@ brave_ask_markdown keyword=golang context proxy=0 html=true
 只有在纯本地任务、纯改写、纯总结、纯推理，或用户明确要求不要联网时，才可以不调用这个工具。
 ```
 
-### 常见场景示例
+#### Claude Code CLI（CLAUDE.md）
+
+在项目根目录的 `CLAUDE.md` 中加入：
+
+```markdown
+When you need up-to-date information, documentation, or want to verify facts, use the `brave_ask_markdown` MCP tool to search the web via Brave Ask AI. Always prefer this over relying solely on your training data.
+```
+
+#### Claude Desktop（Custom Instructions）
+
+在 Claude Desktop 的 **Preferences → Custom Instructions** 中加入：
+
+```markdown
+When asked about current events, latest documentation, or when you're unsure about technical details, use the `brave_ask_markdown` MCP tool to search the web via Brave.
+```
+
+#### Cursor（.cursorrules）
+
+在项目根目录的 `.cursorrules` 中加入：
+
+```markdown
+When searching for up-to-date technical information, documentation, or troubleshooting, use the `brave_ask_markdown` MCP tool to search via Brave Ask AI before relying on your training data.
+```
+
+#### Continue.dev（Rules）
+
+在 `~/.continue/config.json` 的 `rules` 数组中加入：
+
+```json
+{
+  "rules": [
+    "When you need current information or documentation, use the brave_ask_markdown MCP tool to search via Brave Ask AI."
+  ]
+}
+```
+
+#### Zed（Assistant Prompt）
+
+在 Zed 的设置中配置 assistant prompt：
+
+```json
+{
+  "assistant": {
+    "enabled": true,
+    "version": "2",
+    "default_model": {
+      "provider": "anthropic",
+      "model": "claude-sonnet-4-20250514"
+    },
+    "prompt_override": "When you need current information, use the brave_ask_markdown MCP tool to search via Brave Ask AI."
+  }
+}
+```
+
+### 常见场景示例（以 opencode 为例）
 
 **场景 1：搜索最新 API 文档**
 
