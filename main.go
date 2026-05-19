@@ -11,8 +11,9 @@ import (
 	"time"
 
 	htmltomarkdown "github.com/JohannesKaufmann/html-to-markdown/v2"
-	"github.com/chromedp/cdproto/browser"
-	"github.com/chromedp/chromedp"
+	"github.com/go-rod/rod"
+	"github.com/go-rod/rod/lib/launcher"
+	"github.com/go-rod/rod/lib/proto"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
@@ -60,53 +61,60 @@ func resolveProxy(proxyValue string) (string, error) {
 func fetchBraveAskContent(keyword string, proxy string) (string, string, error) {
 	targetURL := "https://search.brave.com/ask?q=" + url.QueryEscape(keyword)
 
-	opts := append(chromedp.DefaultExecAllocatorOptions[:],
-		chromedp.Flag("headless", false),
-	)
+	l := launcher.New().Set("headless", "old")
 	if proxy != "" {
-		opts = append(opts, chromedp.ProxyServer(proxy))
+		l = l.Proxy(proxy)
 	}
 
-	allocCtx, cancel := chromedp.NewExecAllocator(context.Background(), opts...)
-	defer cancel()
-
-	ctx, cancel := chromedp.NewContext(allocCtx)
-	defer cancel()
-
-	ctx, cancel = context.WithTimeout(ctx, 60*time.Second)
-	defer cancel()
-
-	var content string
-
-	err := chromedp.Run(ctx,
-		chromedp.ActionFunc(func(ctx context.Context) error {
-			windowID, _, err := browser.GetWindowForTarget().Do(ctx)
-			if err != nil {
-				return nil
-			}
-			return browser.SetWindowBounds(windowID, &browser.Bounds{
-				WindowState: browser.WindowStateMinimized,
-			}).Do(ctx)
-		}),
-		chromedp.Navigate(targetURL),
-		chromedp.WaitVisible(`div.tap-round-footer`, chromedp.ByQuery),
-		chromedp.Evaluate(`
-			(() => {
-				document
-					.querySelectorAll('div.message.user, div.message.augment, div.message.response-header, div.tap-round-footer, div.tap-followups')
-					.forEach(el => el.remove());
-				return true;
-			})()
-		`, nil),
-		chromedp.OuterHTML(`div.is-complete`, &content, chromedp.ByQuery),
-	)
+	controlURL, err := l.Launch()
 	if err != nil {
-		return "", "", err
+		return "", "", fmt.Errorf("launch browser: %w", err)
+	}
+
+	browser := rod.New().ControlURL(controlURL)
+	if err := browser.Connect(); err != nil {
+		return "", "", fmt.Errorf("connect browser: %w", err)
+	}
+	defer browser.Close()
+
+	page, err := browser.Page(proto.TargetCreateTarget{URL: targetURL})
+	if err != nil {
+		return "", "", fmt.Errorf("navigate: %w", err)
+	}
+	defer page.Close()
+
+	page = page.Timeout(60 * time.Second)
+	defer page.CancelTimeout()
+
+	el, err := page.Element("div.tap-round-footer")
+	if err != nil {
+		return "", "", fmt.Errorf("wait for footer: %w", err)
+	}
+	if err := el.WaitVisible(); err != nil {
+		return "", "", fmt.Errorf("wait for footer visible: %w", err)
+	}
+
+	_, err = page.Eval(`() => {
+		document.querySelectorAll('div.message.user, div.message.augment, div.message.response-header, div.tap-round-footer, div.tap-followups')
+			.forEach(el => el.remove());
+	}`)
+	if err != nil {
+		return "", "", fmt.Errorf("cleanup DOM: %w", err)
+	}
+
+	contentEl, err := page.Element("div.is-complete")
+	if err != nil {
+		return "", "", fmt.Errorf("find content element: %w", err)
+	}
+
+	content, err := contentEl.HTML()
+	if err != nil {
+		return "", "", fmt.Errorf("get content HTML: %w", err)
 	}
 
 	markdown, err := htmltomarkdown.ConvertString(content)
 	if err != nil {
-		return "", "", err
+		return "", "", fmt.Errorf("convert to markdown: %w", err)
 	}
 
 	return content, markdown, nil
