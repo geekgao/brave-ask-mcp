@@ -48,3 +48,20 @@ jobs:
         with:
           name: bravegrab-darwin-universal
           path: bravegrab-darwin-universal
+
+  release:
+    needs: [linux-amd64, windows-amd64, macos-universal]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+      - run: >
+          gh release create
+          "${{ github.ref_name }}"
+          --generate-notes
+          bravegrab-linux-amd64/bravegrab-linux-amd64
+          bravegrab-windows-amd64/bravegrab-windows-amd64.exe
+          bravegrab-darwin-universal/bravegrab-darwin-universal
+        env:
+          GH_TOKEN: ${{ github.token }}
