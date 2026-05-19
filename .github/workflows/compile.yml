@@ -1,0 +1,50 @@
+name: Compile
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  linux-amd64:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+      - run: GOOS=linux GOARCH=amd64 go build -ldflags="-s -w" -o bravegrab-linux-amd64 .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bravegrab-linux-amd64
+          path: bravegrab-linux-amd64
+
+  windows-amd64:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+      - run: GOOS=windows GOARCH=amd64 go build -ldflags="-s -w" -o bravegrab-windows-amd64.exe .
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bravegrab-windows-amd64
+          path: bravegrab-windows-amd64.exe
+
+  macos-universal:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: "1.26"
+      - run: |
+          GOOS=darwin GOARCH=amd64 go build -ldflags="-s -w" -o bravegrab-darwin-amd64 .
+          GOOS=darwin GOARCH=arm64 go build -ldflags="-s -w" -o bravegrab-darwin-arm64 .
+          lipo -create -output bravegrab-darwin-universal bravegrab-darwin-amd64 bravegrab-darwin-arm64
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bravegrab-darwin-universal
+          path: bravegrab-darwin-universal
