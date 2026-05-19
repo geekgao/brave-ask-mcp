@@ -17,6 +17,19 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+func minimizePage(p *rod.Page) {
+	win, err := proto.BrowserGetWindowForTarget{}.Call(p)
+	if err != nil {
+		return
+	}
+	proto.BrowserSetWindowBounds{
+		WindowID: win.WindowID,
+		Bounds: &proto.BrowserBounds{
+			WindowState: proto.BrowserWindowStateMinimized,
+		},
+	}.Call(p)
+}
+
 var defaultProxies = []string{
 	"http://127.0.0.1:8080",
 	"socks5://127.0.0.1:1080",
@@ -61,7 +74,7 @@ func resolveProxy(proxyValue string) (string, error) {
 func fetchBraveAskContent(keyword string, proxy string) (string, string, error) {
 	targetURL := "https://search.brave.com/ask?q=" + url.QueryEscape(keyword)
 
-	l := launcher.New().Set("headless", "old")
+	l := launcher.New()
 	if proxy != "" {
 		l = l.Proxy(proxy)
 	}
@@ -85,6 +98,8 @@ func fetchBraveAskContent(keyword string, proxy string) (string, string, error) 
 
 	page = page.Timeout(60 * time.Second)
 	defer page.CancelTimeout()
+
+	minimizePage(page)
 
 	el, err := page.Element("div.tap-round-footer")
 	if err != nil {
