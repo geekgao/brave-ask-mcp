@@ -72,7 +72,7 @@ func resolveProxy(proxyValue string) (string, error) {
 }
 
 func fetchBraveAskContent(keyword string, proxy string) (string, string, error) {
-	targetURL := "https://search.brave.com/ask?q=" + url.QueryEscape(keyword)
+	targetURL := "https://search.brave.com/ask?q=" + url.QueryEscape("你是精通编程的专家，请基于最新、权威的信息.不要编造内容.**任务**：  ") + url.QueryEscape(keyword)
 
 	l := launcher.New()
 	if proxy != "" {
