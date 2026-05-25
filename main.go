@@ -101,6 +101,11 @@ func fetchBraveAskContent(keyword string, proxy string) (string, string, error) 
 
 	minimizePage(page)
 
+	if captchaBtn, err := page.Timeout(3*time.Second).Element(`button[name="captcha-button"]`); err == nil {
+		captchaBtn.MustClick()
+		captchaBtn.MustWaitInvisible()
+	}
+
 	el, err := page.Element("div.tap-round-footer")
 	if err != nil {
 		return "", "", fmt.Errorf("wait for footer: %w", err)
