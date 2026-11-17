@@ -111,20 +111,37 @@ func fetchBraveAskContent(question string, proxy string) (string, string, error)
 
 	minimizePage(page)
 
-	if captchaBtn, err := page.Timeout(3 * time.Second).Element(`button[name="captcha-button"]`); err == nil {
-		captchaBtn.MustClick()
-		captchaBtn.MustWaitInvisible()
-	}
-
-	el, err := page.Element("div.tap-round-footer")
+	// Why：原来先花 3s 等验证码、再等 footer，无验证码时白交 3s 税；
+	// Race 让 footer 和验证按钮二选一，谁先出现就处理谁。
+	var footerEl *rod.Element
+	captchaSolved := false
+	_, err = page.Race().
+		Element(`button[name="captcha-button"]`).Handle(func(e *rod.Element) error {
+		captchaSolved = true
+		if err := e.Click(proto.InputMouseButtonLeft, 1); err != nil {
+			return err
+		}
+		return e.WaitInvisible()
+	}).
+		Element("div.tap-round-footer").Handle(func(e *rod.Element) error {
+		footerEl = e
+		return nil
+	}).
+		Do()
 	if err != nil {
-		return "", "", fmt.Errorf("wait for footer: %w", err)
+		return "", "", fmt.Errorf("wait for answer: %w", err)
+	}
+	if captchaSolved {
+		footerEl, err = page.Element("div.tap-round-footer")
+		if err != nil {
+			return "", "", fmt.Errorf("wait for footer: %w", err)
+		}
 	}
 	// Why：复杂问题 100s 内仍可能写不完；footer 等不到就退而求其次——
 	// 只要 is-complete 已有实质内容就返回部分答案并注记，模型自行判断
 	// 是够用还是换词重试，总比整轮失败强。
 	complete := true
-	if err := el.WaitVisible(); err != nil {
+	if err := footerEl.WaitVisible(); err != nil {
 		complete = false
 	}
 
