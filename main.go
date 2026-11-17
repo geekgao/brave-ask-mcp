@@ -21,6 +21,8 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
+var mcpServer *mcp.Server
+
 func minimizePage(p *rod.Page) {
 	win, err := proto.BrowserGetWindowForTarget{}.Call(p)
 	if err != nil {
@@ -78,9 +80,36 @@ func resolveProxy(proxyValue string) (string, error) {
 	return proxies[idx], nil
 }
 
-func fetchBraveAskContent(question string, proxy string) (string, string, error) {
+func fetchBraveAskContent(ctx context.Context, req *mcp.CallToolRequest, question string, proxy string) (string, string, error) {
 	// Why：前缀只做通用约束，不预设领域（之前写死“编程专家”，查关税也被带偏）。
 	targetURL := "https://search.brave.com/ask?q=" + url.QueryEscape("请基于最新、权威的信息回答，不要编造内容。") + url.QueryEscape(question)
+
+	// Why：MCP 进度通知让调用方（daemon/抽屉）在 15-100s 的等待里有活可看，
+	// 而不是黑盒转圈。无 progressToken 的老客户端直接跳过，不影响返回。
+	notify := func(progress float64, message string) {
+		if req == nil || req.Params == nil {
+			return
+		}
+		token := req.Params.GetProgressToken()
+		if token == nil || mcpServer == nil {
+			return
+		}
+		var session *mcp.ServerSession
+		for s := range mcpServer.Sessions() {
+			session = s
+			break
+		}
+		if session == nil {
+			return
+		}
+		_ = session.NotifyProgress(ctx, &mcp.ProgressNotificationParams{
+			ProgressToken: token,
+			Progress:      progress,
+			Message:       message,
+		})
+	}
+	startedAt := time.Now()
+	notify(5, "正在启动浏览器…")
 
 	l := launcher.New()
 	if proxy != "" {
@@ -91,6 +120,7 @@ func fetchBraveAskContent(question string, proxy string) (string, string, error)
 	if err != nil {
 		return "", "", fmt.Errorf("launch browser: %w", err)
 	}
+	notify(10, "浏览器已启动，正在打开 Brave Ask…")
 
 	browser := rod.New().ControlURL(controlURL)
 	if err := browser.Connect(); err != nil {
@@ -103,6 +133,29 @@ func fetchBraveAskContent(question string, proxy string) (string, string, error)
 		return "", "", fmt.Errorf("navigate: %w", err)
 	}
 	defer page.Close()
+	notify(20, "页面已打开，等待 AI 生成答案…")
+
+	// Why：心跳只看时间不碰页面（rod 对象跨 goroutine 不安全），10s 一跳
+	// 证明还活着；从 race 之前就启动，把“等 footer 出现”的长极也盖住。
+	progressDone := make(chan struct{})
+	defer close(progressDone)
+	go func() {
+		ticker := time.NewTicker(10 * time.Second)
+		defer ticker.Stop()
+		for {
+			select {
+			case <-progressDone:
+				return
+			case <-ticker.C:
+				elapsed := time.Since(startedAt).Round(time.Second)
+				pct := 20 + 70*float64(elapsed)/float64(95*time.Second)
+				if pct > 90 {
+					pct = 90
+				}
+				notify(pct, fmt.Sprintf("AI 生成中…%s", elapsed))
+			}
+		}
+	}()
 
 	// Why：复杂问题生成慢，60s 不够；daemon 侧 brave 超时同步放宽到 110s，
 	// Stop 按钮可随时中止，不怕等穿。
@@ -162,6 +215,7 @@ func fetchBraveAskContent(question string, proxy string) (string, string, error)
 	if err != nil {
 		return "", "", fmt.Errorf("get content HTML: %w", err)
 	}
+	notify(95, "答案已拿到，正在转换 Markdown…")
 
 	// Why: favicon 图标代理（imgs.search.brave.com）与 +N 图片计数徽标
 	// 都包在 div.logo-wrapper 里，一并移除；表格需 table 插件否则会被拼成纯文本。
@@ -245,7 +299,7 @@ func braveAskTool(
 		}, nil, nil
 	}
 
-	html, markdown, err := fetchBraveAskContent(question, proxy)
+	html, markdown, err := fetchBraveAskContent(ctx, req, question, proxy)
 	if err != nil {
 		return &mcp.CallToolResult{
 			IsError: true,
@@ -281,8 +335,10 @@ func main() {
 		Description: "Fetch Brave Ask rendered result, remove noisy divs, and return Markdown by default or HTML when html=true. " +
 			"Brave Ask is an AI answering agent: ask ONE complete question per call " +
 			"(e.g. compare Hainan vs Hangzhou gas prices) — a single call suffices, " +
-			"do NOT split one question into multiple searches.",
+			"do NOT split one question into multiple searches. " +
+			"Sends progress notifications (browser/page/generating/converting) when the client passes a progress token.",
 	}, braveAskTool)
+	mcpServer = server
 
 	if err := server.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
 		log.Fatal(err)
