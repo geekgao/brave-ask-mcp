@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/url"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -137,12 +138,39 @@ func fetchBraveAskContent(keyword string, proxy string) (string, string, error) 
 
 	// Why: favicon 图标代理（imgs.search.brave.com）与 +N 图片计数徽标
 	// 都包在 div.logo-wrapper 里，一并移除；表格需 table 插件否则会被拼成纯文本。
-	markdown, err := convertToMarkdown(content)
+	markdown, err := convertToMarkdown(promoteTableHeader(content))
 	if err != nil {
 		return "", "", fmt.Errorf("convert to markdown: %w", err)
 	}
 
 	return content, markdown, nil
+}
+
+var (
+	// Why：Brave 的回答表格经常没有 <th>，table 插件此时会吐空表头
+	// （`|  |  |`）还把首行数据挤进正文。无 th 的表才把首行 td 提为 th，
+	// 有 th 的表原样不动；只动首行，避免把数据行误标成表头。
+	reTableBlock = regexp.MustCompile(`(?is)<table.*?</table>`)
+	reFirstRow   = regexp.MustCompile(`(?is)<tr[^>]*>.*?</tr>`)
+	reTdOpen     = regexp.MustCompile(`(?i)<td(\s[^>]*)?>`)
+	reTdClose    = regexp.MustCompile(`(?i)</td>`)
+)
+
+func promoteTableHeader(html string) string {
+	return reTableBlock.ReplaceAllStringFunc(html, func(block string) string {
+		if strings.Contains(strings.ToLower(block), "<th") {
+			return block
+		}
+		first := true
+		return reFirstRow.ReplaceAllStringFunc(block, func(row string) string {
+			if !first {
+				return row
+			}
+			first = false
+			row = reTdOpen.ReplaceAllString(row, "<th$1>")
+			return reTdClose.ReplaceAllString(row, "</th>")
+		})
+	})
 }
 
 func convertToMarkdown(html string) (string, error) {
