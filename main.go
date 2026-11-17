@@ -10,7 +10,10 @@ import (
 	"strings"
 	"time"
 
-	htmltomarkdown "github.com/JohannesKaufmann/html-to-markdown/v2"
+	htmltomarkdown "github.com/JohannesKaufmann/html-to-markdown/v2/converter"
+	"github.com/JohannesKaufmann/html-to-markdown/v2/plugin/base"
+	"github.com/JohannesKaufmann/html-to-markdown/v2/plugin/commonmark"
+	"github.com/JohannesKaufmann/html-to-markdown/v2/plugin/table"
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/launcher"
 	"github.com/go-rod/rod/lib/proto"
@@ -101,7 +104,7 @@ func fetchBraveAskContent(keyword string, proxy string) (string, string, error) 
 
 	minimizePage(page)
 
-	if captchaBtn, err := page.Timeout(3*time.Second).Element(`button[name="captcha-button"]`); err == nil {
+	if captchaBtn, err := page.Timeout(3 * time.Second).Element(`button[name="captcha-button"]`); err == nil {
 		captchaBtn.MustClick()
 		captchaBtn.MustWaitInvisible()
 	}
@@ -115,7 +118,7 @@ func fetchBraveAskContent(keyword string, proxy string) (string, string, error) 
 	}
 
 	_, err = page.Eval(`() => {
-		document.querySelectorAll('div.message.user, div.message.augment, div.message.response-header, div.tap-round-footer, div.tap-followups')
+		document.querySelectorAll('div.message.user, div.message.augment, div.message.response-header, div.tap-round-footer, div.tap-followups, div.logo-wrapper')
 			.forEach(el => el.remove());
 	}`)
 	if err != nil {
@@ -132,12 +135,25 @@ func fetchBraveAskContent(keyword string, proxy string) (string, string, error) 
 		return "", "", fmt.Errorf("get content HTML: %w", err)
 	}
 
-	markdown, err := htmltomarkdown.ConvertString(content)
+	// Why: favicon 图标代理（imgs.search.brave.com）与 +N 图片计数徽标
+	// 都包在 div.logo-wrapper 里，一并移除；表格需 table 插件否则会被拼成纯文本。
+	markdown, err := convertToMarkdown(content)
 	if err != nil {
 		return "", "", fmt.Errorf("convert to markdown: %w", err)
 	}
 
 	return content, markdown, nil
+}
+
+func convertToMarkdown(html string) (string, error) {
+	conv := htmltomarkdown.NewConverter(
+		htmltomarkdown.WithPlugins(
+			base.NewBasePlugin(),
+			commonmark.NewCommonmarkPlugin(),
+			table.NewTablePlugin(),
+		),
+	)
+	return conv.ConvertString(html)
 }
 
 func braveAskTool(
