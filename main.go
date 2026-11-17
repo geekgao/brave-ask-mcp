@@ -40,9 +40,12 @@ var defaultProxies = []string{
 }
 
 type BraveAskInput struct {
-	Keyword string `json:"keyword" jsonschema:"search keyword for Brave Ask"`
-	Proxy   string `json:"proxy,omitempty" jsonschema:"proxy URL or index into proxy list, optional"`
-	HTML    bool   `json:"html,omitempty" jsonschema:"return raw HTML instead of Markdown"`
+	// Why：参数名就是 prompt——叫 keyword 模型就填关键词堆，
+	// 叫 question 模型才写完整问题。老 keyword 留别名兼容旧客户端。
+	Question string `json:"question,omitempty" jsonschema:"ONE self-contained natural-language research question (e.g. compare Hainan vs Hangzhou gas prices). NOT a pile of keywords"`
+	Keyword  string `json:"keyword,omitempty" jsonschema:"deprecated alias of question"`
+	Proxy    string `json:"proxy,omitempty" jsonschema:"proxy URL or index into proxy list, optional"`
+	HTML     bool   `json:"html,omitempty" jsonschema:"return raw HTML instead of Markdown"`
 }
 
 func proxyList() []string {
@@ -189,12 +192,15 @@ func braveAskTool(
 	req *mcp.CallToolRequest,
 	input BraveAskInput,
 ) (*mcp.CallToolResult, any, error) {
-	keyword := strings.TrimSpace(input.Keyword)
-	if keyword == "" {
+	question := strings.TrimSpace(input.Question)
+	if question == "" {
+		question = strings.TrimSpace(input.Keyword)
+	}
+	if question == "" {
 		return &mcp.CallToolResult{
 			IsError: true,
 			Content: []mcp.Content{
-				&mcp.TextContent{Text: "keyword is required"},
+				&mcp.TextContent{Text: "question is required"},
 			},
 		}, nil, nil
 	}
@@ -209,7 +215,7 @@ func braveAskTool(
 		}, nil, nil
 	}
 
-	html, markdown, err := fetchBraveAskContent(keyword, proxy)
+	html, markdown, err := fetchBraveAskContent(question, proxy)
 	if err != nil {
 		return &mcp.CallToolResult{
 			IsError: true,
@@ -243,7 +249,7 @@ func main() {
 	mcp.AddTool(server, &mcp.Tool{
 		Name: "brave_ask_markdown",
 		Description: "Fetch Brave Ask rendered result, remove noisy divs, and return Markdown by default or HTML when html=true. " +
-			"Brave Ask is an AI answering agent: describe your complete need in ONE keyword call " +
+			"Brave Ask is an AI answering agent: ask ONE complete question per call " +
 			"(e.g. compare Hainan vs Hangzhou gas prices) — a single call suffices, " +
 			"do NOT split one question into multiple searches.",
 	}, braveAskTool)

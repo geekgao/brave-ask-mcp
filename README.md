@@ -180,15 +180,16 @@ claude mcp add brave_ask -- stdio bravegrab
 
 | 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `keyword` | string | 是 | 搜索关键词 |
+| `question` | string | 是 | 一个完整、自包含的自然语言问题（Brave Ask 是 AI 问答 agent，一次问完，不要填关键词堆） |
+| `keyword` | string | 否 | `question` 的旧别名（兼容用） |
 | `proxy` | string | 否 | 代理 URL 或 `PROXY_LIST` 中的索引（如 `0`、`1`） |
 | `html` | bool | 否 | 设为 `true` 时返回原始 HTML 而非 Markdown |
 
 **使用示例：**
 
 ```
-brave_ask_markdown keyword=Go语言泛型教程
-brave_ask_markdown keyword=golang context proxy=0 html=true
+brave_ask_markdown question=Go语言泛型教程怎么用？
+brave_ask_markdown question="golang context 是什么" proxy=0 html=true
 ```
 
 ### 提示词配置
