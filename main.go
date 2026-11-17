@@ -78,8 +78,9 @@ func resolveProxy(proxyValue string) (string, error) {
 	return proxies[idx], nil
 }
 
-func fetchBraveAskContent(keyword string, proxy string) (string, string, error) {
-	targetURL := "https://search.brave.com/ask?q=" + url.QueryEscape("你是精通编程的专家，请基于最新、权威的信息.不要编造内容.**任务**：  ") + url.QueryEscape(keyword)
+func fetchBraveAskContent(question string, proxy string) (string, string, error) {
+	// Why：前缀只做通用约束，不预设领域（之前写死“编程专家”，查关税也被带偏）。
+	targetURL := "https://search.brave.com/ask?q=" + url.QueryEscape("请基于最新、权威的信息回答，不要编造内容。") + url.QueryEscape(question)
 
 	l := launcher.New()
 	if proxy != "" {
@@ -103,7 +104,9 @@ func fetchBraveAskContent(keyword string, proxy string) (string, string, error) 
 	}
 	defer page.Close()
 
-	page = page.Timeout(60 * time.Second)
+	// Why：复杂问题生成慢，60s 不够；daemon 侧 brave 超时同步放宽到 110s，
+	// Stop 按钮可随时中止，不怕等穿。
+	page = page.Timeout(100 * time.Second)
 	defer page.CancelTimeout()
 
 	minimizePage(page)
@@ -117,8 +120,12 @@ func fetchBraveAskContent(keyword string, proxy string) (string, string, error) 
 	if err != nil {
 		return "", "", fmt.Errorf("wait for footer: %w", err)
 	}
+	// Why：复杂问题 100s 内仍可能写不完；footer 等不到就退而求其次——
+	// 只要 is-complete 已有实质内容就返回部分答案并注记，模型自行判断
+	// 是够用还是换词重试，总比整轮失败强。
+	complete := true
 	if err := el.WaitVisible(); err != nil {
-		return "", "", fmt.Errorf("wait for footer visible: %w", err)
+		complete = false
 	}
 
 	_, err = page.Eval(`() => {
@@ -144,6 +151,12 @@ func fetchBraveAskContent(keyword string, proxy string) (string, string, error) 
 	markdown, err := convertToMarkdown(promoteTableHeader(content))
 	if err != nil {
 		return "", "", fmt.Errorf("convert to markdown: %w", err)
+	}
+	if !complete {
+		if len(strings.TrimSpace(markdown)) < 100 {
+			return "", "", fmt.Errorf("answer incomplete and too short to use")
+		}
+		markdown += "\n\n> ⚠️ 页面尚未完全加载，内容可能不完整。"
 	}
 
 	return content, markdown, nil
