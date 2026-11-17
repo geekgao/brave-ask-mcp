@@ -213,8 +213,11 @@ func main() {
 	)
 
 	mcp.AddTool(server, &mcp.Tool{
-		Name:        "brave_ask_markdown",
-		Description: "Fetch Brave Ask rendered result, remove noisy divs, and return Markdown by default or HTML when html=true.",
+		Name: "brave_ask_markdown",
+		Description: "Fetch Brave Ask rendered result, remove noisy divs, and return Markdown by default or HTML when html=true. " +
+			"Brave Ask is an AI answering agent: describe your complete need in ONE keyword call " +
+			"(e.g. compare Hainan vs Hangzhou gas prices) — a single call suffices, " +
+			"do NOT split one question into multiple searches.",
 	}, braveAskTool)
 
 	if err := server.Run(context.Background(), &mcp.StdioTransport{}); err != nil {
